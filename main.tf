@@ -16,6 +16,48 @@ variable "server_port" {
     default = 80
 }
 
+resource "aws_s3_bucket" "terraform_state" {
+    bucket = "test2-stg-tf-state"
+    
+    lifecycle {
+        prevent_destroy = true
+    }
+    
+    versioning {
+        enabled = true
+    }
+    
+    server_side_encryption_configuration {
+        rule {
+            apply_server_side_encryption_by_default {
+                sse_algorithm = "AES256"
+            }
+        }
+    }
+} 
+
+resource "aws_dynamodb_table" "terraform_locks" {
+    name = "test2-stg-tf-locks"
+    billing_mode = "PAY_PER_REQUEST"
+    hash_key = "LockID"
+    
+    attribute {
+        name = "LockID"
+        type = "S"
+    }
+}
+
+terraform {
+    backend "s3" {
+        bucket = "test2-stg-tf-state"
+        key = "terraform.tfstate"
+        region = "us-east-1"
+        dynamodb_table = "test2-stg-tf-locks"
+        encrypt = true
+    }
+}
+
+
 resource "aws_security_group" "alb" {
     name = "terraform-example-alb"
     
@@ -31,6 +73,10 @@ resource "aws_security_group" "alb" {
         to_port = 0
         protocol ="-1"
         cidr_blocks = ["0.0.0.0/0"]
+    }
+    
+    lifecycle {
+        create_before_destroy = true
     }
 }
 
@@ -86,6 +132,10 @@ resource "aws_lb_target_group" "asg" {
         timeout= 3
         healthy_threshold =2
         unhealthy_threshold = 2
+    }
+    
+    lifecycle {
+        create_before_destroy = true
     }
 }
 
